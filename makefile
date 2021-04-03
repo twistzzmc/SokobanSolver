@@ -3,7 +3,7 @@ CC = g++ -Wall
 map_in = maps_in/e1.in
 map_out = maps_out/e1.out
 
-all: compile run check clean
+all: compile cin
 
 compile:
 	$(CC) -o sokoban.exe sokoban.cpp

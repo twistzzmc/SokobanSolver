@@ -3,7 +3,7 @@
 #include <vector>
 #include <unordered_set>
 #include <queue>
-// #include <bits/stdc++.h>
+#include <unordered_map>
 
 using namespace std;
 
@@ -15,6 +15,12 @@ using namespace std;
     a) if there is - move the box
     b) if there is not - finda new path
 4. Repeat for all the boxes.
+
+*/
+
+/*
+
+1. Find a path 
 
 */
 
@@ -64,16 +70,19 @@ bool checkForWin(shop_t s);
 vector<spot_t> shortest_path(shop_t s, spot_t start, vector<spot_t> ends, unordered_set<string> forbidden = {});
 int checkPullPath(shop_t s, vector<spot_t> path);
 vector<vector<spot_t>> checkWorkerPlacement(shop_t s, vector<spot_t> path);
-vector<vector<spot_t>> canBoxBeMovedToDWF(shop_t s, int boxNumber);
+vector<vector<spot_t>> canBoxBeMovedToDWF(shop_t s, int boxNumber, unordered_map<int, string>* order, int currentMove);
 
 void putMovesIntoVectorFromPath(vector<char>* moves, vector<vector<spot_t>> path);
-vector<char>* solveSokoban(shop_t* sokoban);
+vector<char>* solveSokoban(shop_t* sokoban, unordered_map<int, string>* order);
 
 void testManually(shop_t* sokoban);
 void printMovability(shop_t s);
+void print_map(std::unordered_map<int, string> const &m);
 
 string spotsToString(spot_t s1, spot_t s2);
 bool checkIfInSet(int x1, int y1, int x2, int y2, unordered_set<string> set, shop_t s);
+int findDwfPlaceFromSpot(shop_t s, spot_t spot);
+bool checkIfputDWF(int boxNumber, int currentMove, int DWF, unordered_map<int, string>* order);
 
 
 int main(int argc, char* argv[])
@@ -83,17 +92,37 @@ int main(int argc, char* argv[])
     // shop_t* sokoban = readMapFromFile(argv[1]);
     shop_t* sokoban = readFromCin();
     // cout << "Initial sokoban map:\n\n" << sokoban;
+
+    // testManually(sokoban);
     
+    unordered_map<int, string>* order = new unordered_map<int, string>;
+    vector<char>* moves;
     shop_t* sokobanCopy = new shop_t;
     *sokobanCopy = *sokoban;
-    vector<char>* moves = solveSokoban(sokoban);
 
-    // cout << "\nFinal sokoban map:\n\n" << sokoban;
-    // cout << moves->size() << "\n\n";
-    if (checkForWin(*sokoban))
-        cout << *moves;
-    else 
-        cout << "Solving failed!";
+    while (true) {
+        if (order->size() != 0) 
+            *sokoban = *sokobanCopy;
+
+        moves = solveSokoban(sokoban, order);
+
+        
+        // cout << "Printing order:\n";
+        // print_map(*order);
+        // cout << sokoban;
+
+        if (checkForWin(*sokoban)) {
+            cout << *moves;
+            break;
+        } else {
+            moves->clear();
+        }
+    }
+
+    // if (checkForWin(*sokoban))
+    //     cout << *moves;
+    // else 
+    //     cout << "Solving failed!";
 
     delete(sokoban);
     delete(moves);
@@ -667,10 +696,8 @@ vector<vector<spot_t>> checkWorkerPlacement(shop_t s, vector<spot_t> path) {
     return fullPath;
 }
 
-vector<vector<spot_t>> canBoxBeMovedToDWF(shop_t s, int boxNumber) {
+vector<vector<spot_t>> canBoxBeMovedToDWF(shop_t s, int boxNumber, unordered_map<int, string>* order, int currentMove) {
     unordered_set<string> forbiddenMoves;
-
-    // cout << "\n--CANBOXBEMOVEDTODWF--\n";
 
     shop_t sCopy = s;
     while(true) {
@@ -680,7 +707,15 @@ vector<vector<spot_t>> canBoxBeMovedToDWF(shop_t s, int boxNumber) {
         // DWFs positions (ends for shortest path from box to DWF)
         vector<spot_t> ends;
         for (size_t i = 0; i < s.DWFs.size(); i++) {
-            ends.push_back(s.map[s.DWFs[i][0]][s.DWFs[i][1]]);
+            if (checkIfputDWF(boxNumber, currentMove, i, order))
+                ends.push_back(s.map[s.DWFs[i][0]][s.DWFs[i][1]]);
+            
+            // if (currentMove == 3) {
+            //     cout << "currentMove 3\n";
+            //     cout << boxNumber << " " << currentMove << " " << i << "\n";
+            //     cout << checkIfputDWF(boxNumber, currentMove, i, order) << endl;
+            //     cout << ends;
+            // }
         }
 
         // Look for shortest path between box and DWFs
@@ -741,7 +776,7 @@ void putMovesIntoVectorFromPath(vector<char>* moves, vector<vector<spot_t>> path
     }
 }
 
-vector<char>* solveSokoban(shop_t* sokoban) {
+vector<char>* solveSokoban(shop_t* sokoban, unordered_map<int, string>* order) {
     vector<char>* moves = new vector<char>;
     // cout << sokoban;
 
@@ -751,12 +786,18 @@ vector<char>* solveSokoban(shop_t* sokoban) {
         boxesToPut.push_back(i);
     }
 
+    int lastMove, lastDWF, lastBox;
+
+    int currentMove = 1;
     int currentBox = -1;
     while (!boxesToPut.empty() && failedBoxes.size() != boxesToPut.size()) {
         currentBox = (currentBox + 1) % boxesToPut.size();
 
-        vector<vector<spot_t>> boxFullPath = canBoxBeMovedToDWF(*sokoban, boxesToPut[currentBox]);
+        // cout << "ORDER\n";
+        // print_map(*order);
+        vector<vector<spot_t>> boxFullPath = canBoxBeMovedToDWF(*sokoban, boxesToPut[currentBox], order, currentMove);
         // cout << "current box: " << currentBox << "  |  path size\n" << boxFullPath << "\n";
+        // cout << "FULL PATH:\n" << boxFullPath;
 
         if (boxFullPath.size() != 0) {
             if (!pullBoxAcrossFullPath(sokoban, boxFullPath)) {
@@ -764,15 +805,41 @@ vector<char>* solveSokoban(shop_t* sokoban) {
                 break;
             }
 
+            lastMove = currentMove;
+            lastDWF = findDwfPlaceFromSpot(*sokoban, boxFullPath[boxFullPath.size() - 1][0]);
+            lastBox = boxesToPut[currentBox];
+
             boxesToPut.erase(boxesToPut.begin() + currentBox);
             putMovesIntoVectorFromPath(moves, boxFullPath);
+
+            // lastBox = currentBox;
+
+            // if (!moveInOrder) {
+            //     int dwfOrder = findDwfPlaceFromSpot(*sokoban, boxFullPath[boxFullPath.size() - 1][0]);
+            //     string value = to_string(dwfOrder) + " " + to_string(currentMove) + "|";
+                
+            //     if (!order->count(boxesToPut[currentBox]))
+            //         order->insert({boxesToPut[currentBox], value});
+            //     else 
+            //         order->at(boxesToPut[currentBox]) += value;
+
+            //     moveInOrder = true;
+            // }
 
             failedBoxes.clear();
             // cout << "inside solve sokoban\n\n" << sokoban;
         } else {
             failedBoxes.push_back(currentBox);
         }
+        
+        currentMove++;
     }
+
+    string value = to_string(lastDWF) + " " + to_string(lastMove) + "|";
+    if (!order->count(lastBox))
+        order->insert({lastBox, value});
+    else 
+        order->at(lastBox) += value;
 
     return moves;
 }
@@ -801,6 +868,12 @@ void printMovability(shop_t s) {
     }
 }
 
+void print_map(std::unordered_map<int, string> const &m) {
+    for (auto const& pair: m) {
+        std::cout << "{" << pair.first << ": " << pair.second << "}\n";
+    }
+}
+
 
 string spotsToString(spot_t s1, spot_t s2) {
     string s = to_string(s1.x) + "." + to_string(s1.y);
@@ -816,5 +889,37 @@ bool checkIfInSet(int x1, int y1, int x2, int y2, unordered_set<string> set, sho
     unordered_set<string>::const_iterator got = set.find(key);
 
     if (got == set.end()) return false;
+    return true;
+}
+
+int findDwfPlaceFromSpot(shop_t s, spot_t spot) {
+    for (int i = 0; i < (int) s.DWFs.size(); i++) {
+        if (spot.x == s.DWFs[i][0] && spot.y == s.DWFs[i][1]) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+bool checkIfputDWF(int boxNumber, int currentMove, int DWF, unordered_map<int, string>* order) {
+    if (!order->count(boxNumber)) return true;
+
+    string valueString = order->at(boxNumber);
+
+    size_t pos = 0;
+    string delimeter = "|";
+    while ((pos = valueString.find(delimeter)) != string::npos) {
+        string token = valueString.substr(0, pos);
+        valueString.erase(0, pos + delimeter.length());
+
+        int spacePlace = token.find(" ");
+        int currDWF = stoi(token.substr(0, spacePlace));
+        token.erase(0, spacePlace + 1);
+        int currMove = stoi(token);
+
+        if (currDWF == DWF && currMove == currentMove) return false;
+    }
+
     return true;
 }
