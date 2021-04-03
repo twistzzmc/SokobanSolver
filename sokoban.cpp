@@ -1,6 +1,9 @@
 #include <iostream>
 #include <fstream>
-#include <bits/stdc++.h>
+#include <vector>
+#include <unordered_set>
+#include <queue>
+// #include <bits/stdc++.h>
 
 using namespace std;
 
@@ -44,6 +47,8 @@ ostream& operator<<(ostream& os, const shop_t* s);
 ostream& operator<<(ostream& os, const shop_t s);
 
 shop_t* readMapFromFile(string filePath);
+shop_t* readFromCin();
+spot_t getMapSpot(char c, shop_t* sokoban, int i, int j);
 
 bool move(shop_t* s, char d);
 bool pullBoxAcrossFullPath(shop_t* s, vector<vector<spot_t>> path);
@@ -66,7 +71,6 @@ vector<char>* solveSokoban(shop_t* sokoban);
 
 void testManually(shop_t* sokoban);
 void printMovability(shop_t s);
-void print_set(unordered_set<string> s);
 
 string spotsToString(spot_t s1, spot_t s2);
 bool checkIfInSet(int x1, int y1, int x2, int y2, unordered_set<string> set, shop_t s);
@@ -74,29 +78,22 @@ bool checkIfInSet(int x1, int y1, int x2, int y2, unordered_set<string> set, sho
 
 int main(int argc, char* argv[])
 {
-    cout << "\n\nLet the sokoban begin!\n" << endl;
+    // cout << "\n\nLet the sokoban begin!\n" << endl;
 
-    if (argc > 3) {
-        cout << "ERROR: To many arguments! Arguments needed - 2!" << endl;
-        return 0;
-    } else if (argc == 1) {
-        cout << "ERROR: To little arguments! Arguments needed - 2!" << endl;
-        return 0;
-    }
-
-    shop_t* sokoban = readMapFromFile(argv[1]);
-    cout << "Initial sokoban map:\n\n" << sokoban;
+    // shop_t* sokoban = readMapFromFile(argv[1]);
+    shop_t* sokoban = readFromCin();
+    // cout << "Initial sokoban map:\n\n" << sokoban;
     
     shop_t* sokobanCopy = new shop_t;
     *sokobanCopy = *sokoban;
     vector<char>* moves = solveSokoban(sokoban);
 
-    cout << "\nFinal sokoban map:\n\n" << sokoban;
-
-    cout << "Moves:\n" << *moves;
-
-    ofstream outputFile(argv[2]);
-    outputFile << *moves;
+    // cout << "\nFinal sokoban map:\n\n" << sokoban;
+    // cout << moves->size() << "\n\n";
+    if (checkForWin(*sokoban))
+        cout << *moves;
+    else 
+        cout << "Solving failed!";
 
     delete(sokoban);
     delete(moves);
@@ -270,6 +267,83 @@ shop_t* readMapFromFile(string filePath) {
     return sokoban;
 }
 
+shop_t* readFromCin() {
+    shop_t* sokoban = new shop_t;
+    vector<vector<spot_t> > map;
+    string line;
+
+    vector<vector<int>> boxes;
+    vector<vector<int>> DWFs;
+    sokoban->boxes = boxes;
+    sokoban->DWFs = DWFs;
+
+    cin >> sokoban->height;
+    cin >> sokoban->width;
+    
+    for (int i = 0; i < sokoban->height; i++) {
+        vector<spot_t> tmpMapLine;
+        for (int j = 0; j < sokoban->width; j++){
+            
+            char c;
+            while (true) { 
+                c = getchar(); 
+                if (c != '\n') break; 
+            }
+
+            spot_t spot = getMapSpot(c, sokoban, i, j);
+            tmpMapLine.push_back(spot);
+        }
+        map.push_back(tmpMapLine);
+    }
+    sokoban->map = map;
+
+    return sokoban;
+}
+
+spot_t getMapSpot(char c, shop_t* sokoban, int i, int j) {
+    spot_t spot;
+    spot.c = c;
+    spot.x = i;
+    spot.y = j;
+
+    switch (c) {
+        case 'O':
+            {
+                vector<int> tempBox;
+                tempBox.push_back(i);
+                tempBox.push_back(j);
+                sokoban->boxes.push_back(tempBox);
+            }
+        case '#':
+            spot.movable = false;
+            spot.isDWF = false;
+            break;
+
+        case '*':
+            {
+                vector<int> tempDWF;
+                tempDWF.push_back(i);
+                tempDWF.push_back(j);
+                sokoban->DWFs.push_back(tempDWF);
+            }
+
+            spot.isDWF = true;
+            spot.movable = true;
+            break;
+        
+        case '-':
+            sokoban->worker[0] = i;
+            sokoban->worker[1] = j;
+        
+        default:
+            spot.movable = true;
+            spot.isDWF = false;
+            break;
+    }
+
+    return spot;
+}
+
 
 bool move(shop_t* s, char d) {
     if (!canDoMove(*s, d)) return false;
@@ -324,9 +398,12 @@ bool pullBoxAcrossFullPath(shop_t* s, vector<vector<spot_t>> path) {
     for (int i = 0; i < (int)path.size(); i++) {
         for (int j = path[i].size() - 3; j >= 0; j--) {
             // cout << "Moving to: " << path[i][j];
+            // cout << "From:      " << path[i][j + 1];
+            // cout << "Move type: " << moveTypeFromMove(path[i][j + 1], path[i][j], false) << endl;
             if (!move(s, moveTypeFromMove(path[i][j + 1], path[i][j], false))) return false;
         }
         // cout << "\n";
+        // cout << s;
         if (!move(s, moveTypeFromMove(path[i][path[i].size() - 1], path[i][0], true))) return false;
     }
 
@@ -382,12 +459,12 @@ bool canDoMove(shop_t s, char d, spot_t pos) {
             break;
         case 'r':
         case 'R':
-            if (y == s.width - 1 || !s.map[x][y + 1].movable)
+            if (y == s.width || !s.map[x][y + 1].movable)
                 return false;
             break;
         case 'd':
         case 'D':
-            if (y == s.height - 1 || !s.map[x + 1][y].movable)
+            if (x == s.height || !s.map[x + 1][y].movable)
                 return false;
             break;
     }
@@ -591,8 +668,9 @@ vector<vector<spot_t>> checkWorkerPlacement(shop_t s, vector<spot_t> path) {
 }
 
 vector<vector<spot_t>> canBoxBeMovedToDWF(shop_t s, int boxNumber) {
-    // cout << "\n--CANBOXBEMOVEDTODWF--\n";
     unordered_set<string> forbiddenMoves;
+
+    // cout << "\n--CANBOXBEMOVEDTODWF--\n";
 
     shop_t sCopy = s;
     while(true) {
@@ -667,24 +745,32 @@ vector<char>* solveSokoban(shop_t* sokoban) {
     vector<char>* moves = new vector<char>;
     // cout << sokoban;
 
+    vector<int> failedBoxes;
     vector<int> boxesToPut;
     for (int i = 0; i < (int) sokoban->boxes.size(); i++) {
         boxesToPut.push_back(i);
     }
 
     int currentBox = -1;
-    while (!boxesToPut.empty()) {
+    while (!boxesToPut.empty() && failedBoxes.size() != boxesToPut.size()) {
         currentBox = (currentBox + 1) % boxesToPut.size();
 
         vector<vector<spot_t>> boxFullPath = canBoxBeMovedToDWF(*sokoban, boxesToPut[currentBox]);
+        // cout << "current box: " << currentBox << "  |  path size\n" << boxFullPath << "\n";
 
         if (boxFullPath.size() != 0) {
-            if (!pullBoxAcrossFullPath(sokoban, boxFullPath)) 
-                throw "Failed to move the box accross its path!";
+            if (!pullBoxAcrossFullPath(sokoban, boxFullPath)) {
+                cout << "Failed to move the box!\n";
+                break;
+            }
 
             boxesToPut.erase(boxesToPut.begin() + currentBox);
             putMovesIntoVectorFromPath(moves, boxFullPath);
-            // cout << sokoban;
+
+            failedBoxes.clear();
+            // cout << "inside solve sokoban\n\n" << sokoban;
+        } else {
+            failedBoxes.push_back(currentBox);
         }
     }
 
@@ -715,9 +801,6 @@ void printMovability(shop_t s) {
     }
 }
 
-void print_set(unordered_set<string> s) {
-    copy(s.begin(), s.end(), ostream_iterator<string>(cout, " "));
-}
 
 string spotsToString(spot_t s1, spot_t s2) {
     string s = to_string(s1.x) + "." + to_string(s1.y);
